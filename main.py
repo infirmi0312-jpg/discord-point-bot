@@ -36,8 +36,11 @@ user_points = {}
 @client.event
 async def on_ready():
     await tree.sync()
-    # flush=True をつけることで、ログに即座に表示されるようになります
     print(f"ログインしました: {client.user}", flush=True)
+    
+    # ▼▼▼ ここを追加しました ▼▼▼
+    # 「プレイ中: /money で残高確認」と表示させる設定
+    await client.change_presence(activity=discord.Game(name="/money で残高確認"))
 
 # ▼▼▼ ここからコマンド定義（プロフィール表示対応版） ▼▼▼
 
