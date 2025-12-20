@@ -1,19 +1,36 @@
 import discord
 from discord import app_commands
 import os
+from flask import Flask
+from threading import Thread
 
 # ==========================================
 # 設定エリア
 # ==========================================
-TOKEN = "MTQ1MTYxMTE1NDg2MTUyMzAyNA.Ga8eZh.LgwwHapJcLnbjsFmJRbhqxeOrdD0nDkPgeTY50"
-APP_ID = "1451611154861523024"
+TOKEN = "ここにBot Token"
+APP_ID = "ここにApplication ID"
 # ==========================================
+
+# --- Renderで動かすためのWebサーバー機能 ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# ---------------------------------------
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# 簡易データベース（再起動すると消えますが、まずは動くことを確認しましょう）
+# 簡易データベース（注意：再起動するとリセットされます）
 user_points = {}
 
 @client.event
@@ -59,4 +76,6 @@ async def remove(interaction: discord.Interaction, user: discord.User, amount: i
     user_points[uid] = user_points.get(uid, 1000) - amount
     await interaction.response.send_message(f"🔻 ポイントを {amount} pt 没収しました。")
 
+# Webサーバーを起動してからBotを起動
+keep_alive()
 client.run(TOKEN)
