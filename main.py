@@ -7,8 +7,8 @@ from threading import Thread
 # ==========================================
 # 設定エリア
 # ==========================================
-TOKEN = "ここにBot Token"
-APP_ID = "ここにApplication ID"
+TOKEN = os.getenv("TOKEN") # ←こう書き換える（カッコの中身もこのまま！）
+APP_ID = "ここにApplication ID" # ←IDはそのままでOK（IDは公開されても安全です）
 # ==========================================
 
 # --- Renderで動かすためのWebサーバー機能 ---
