@@ -74,7 +74,7 @@ async def give(interaction: discord.Interaction, user: discord.User, amount: int
     
     await interaction.response.send_message(f"💸 {interaction.user.mention} から {user.mention} へ {amount} pt 送金しました！")
 
-@tree.command(name="add", description="【管理】ポイント付与")
+@tree.command(name="add", description="ポイント付与")
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def add(interaction: discord.Interaction, user: discord.User, amount: int):
@@ -82,7 +82,7 @@ async def add(interaction: discord.Interaction, user: discord.User, amount: int)
     user_points[uid] = user_points.get(uid, 1000) + amount
     await interaction.response.send_message(f"✅ {user.mention} に {amount} pt 追加しました。")
 
-@tree.command(name="remove", description="【管理】ポイント没収")
+@tree.command(name="remove", description="ポイント没収")
 @app_commands.allowed_installs(guilds=True, users=True)
 @app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def remove(interaction: discord.Interaction, user: discord.User, amount: int):
