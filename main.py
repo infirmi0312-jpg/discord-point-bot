@@ -35,6 +35,8 @@ def keep_alive():
 
 intents = discord.Intents.default()
 intents.voice_states = True
+intents.members = True  # ★ここを追加（メンバー情報を取得するために必須）
+intents.message_content = True # ★念のため追加
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
