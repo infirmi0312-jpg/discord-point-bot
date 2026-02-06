@@ -175,5 +175,18 @@ async def remove(interaction: discord.Interaction, user: discord.User, amount: i
     user_points[uid] = user_points.get(uid, 1000) - amount
     await interaction.response.send_message(f"🔻 {user.mention} から {amount} pt 没収しました。")
 
-keep_alive()
-client.run(TOKEN)
+if __name__ == "__main__":
+    keep_alive()
+    
+    # Tokenがない場合のエラーチェック
+    if not TOKEN:
+        print("エラー: 環境変数 'TOKEN' が読み込めませんでした。", flush=True)
+    else:
+        try:
+            client.run(TOKEN)
+        except discord.errors.PrivilegedIntentsRequired:
+            print("エラー: Developer Portalで 'Server Members Intent' がONになっていません！", flush=True)
+        except discord.errors.LoginFailure:
+            print("エラー: Tokenが間違っています。Developer Portalで再発行して環境変数を更新してください。", flush=True)
+        except Exception as e:
+            print(f"その他のエラーが発生しました: {e}", flush=True)
