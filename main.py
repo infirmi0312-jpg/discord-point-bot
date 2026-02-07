@@ -4,7 +4,6 @@ import os
 from flask import Flask
 from threading import Thread
 import datetime
-import sys
 
 # ==========================================
 # 設定エリア
@@ -12,7 +11,7 @@ import sys
 TOKEN = os.getenv("TOKEN")
 APP_ID = "1451611154861523024" 
 ALERT_CHANNEL_ID = 1449751244351733831
-ADMIN_IDS = [] 
+ADMIN_IDS = [] # あなたのユーザーIDを入れておくとsyncコマンドが使えます
 # ==========================================
 
 # --- Webサーバー機能 ---
@@ -30,11 +29,11 @@ def keep_alive():
     t.start()
 # ---------------------------------------
 
-# ★★★ ここが最重要（アプデ対応） ★★★
+# ▼▼▼ Intentsの設定（ここが重要） ▼▼▼
 intents = discord.Intents.default()
-intents.voice_states = True  # 通話状態の取得
-intents.members = True       # メンバー情報の取得（これが無いと通知が来ない）
-intents.message_content = True # メッセージ内容の取得
+intents.voice_states = True # 通話状態の取得に必須
+intents.members = True      # ★メンバー名・アイコン取得に必須
+intents.message_content = True # メッセージ内容の取得（念のため）
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
@@ -45,75 +44,81 @@ call_start_times = {}
 
 @client.event
 async def on_ready():
-    try:
-        await tree.sync()
-        print(f"✅ ログイン成功: {client.user.name} (ID: {client.user.id})", flush=True)
-        print(f"✅ 導入サーバー数: {len(client.guilds)}", flush=True)
+    # ★注意: ここでの tree.sync() は削除しました。
+    # 起動のたびに同期すると429エラーになりやすいためです。
+    print(f"ログインしました: {client.user}", flush=True)
+    await client.change_presence(activity=discord.Game(name="/money で所持ポイントを確認"))
+
+# ★新機能: コマンドを手動で同期するための隠しコマンド
+# チャットで「!sync」と打つと同期されます（管理者のみ推奨）
+@client.event
+async def on_message(message):
+    if message.content == "!sync":
+        # 必要ならここで ADMIN_IDS チェックを入れてください
+        # if message.author.id not in ADMIN_IDS: return
         
-        # チャンネルが見えているかテスト
-        channel = client.get_channel(ALERT_CHANNEL_ID)
-        if channel:
-            print(f"✅ 通知チャンネル確認OK: {channel.name}", flush=True)
-        else:
-            print(f"⚠️ エラー: 通知チャンネル(ID: {ALERT_CHANNEL_ID})が見つかりません。Botがそのサーバーにいないか、権限がありません。", flush=True)
-            
-        await client.change_presence(activity=discord.Game(name="/money で所持ポイントを確認"))
-    except Exception as e:
-        print(f"❌ 起動時エラー: {e}", flush=True)
+        await tree.sync()
+        await message.channel.send("コマンドを同期しました！")
 
 # ▼▼▼ 通話お知らせ機能 ▼▼▼
 @client.event
 async def on_voice_state_update(member, before, after):
-    # Bot自身が動いた場合は無視
+    # Bot自身の移動は無視
     if member.bot:
         return
 
     alert_channel = client.get_channel(ALERT_CHANNEL_ID)
     if alert_channel is None:
+        print("エラー: 通知チャンネルが見つかりません")
         return
 
     jst = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(jst)
 
-    # 通話開始（チャンネルに入った、かつ、そのチャンネルに1人だけ＝最初の1人）
+    # 通話開始（誰もいないチャンネルに誰かが入った）
     if after.channel is not None and len(after.channel.members) == 1:
         call_start_times[after.channel.id] = now
-        embed = discord.Embed(title="📞 通話開始", color=0xff4d4d)
+        
+        # メンバー情報が正しく取れているか確認
+        name = member.display_name if member else "不明なユーザー"
+        avatar_url = member.display_avatar.url if member else None
+
+        embed = discord.Embed(title="通話開始", color=0xff4d4d)
         embed.add_field(name="チャンネル", value=after.channel.name, inline=True)
-        embed.add_field(name="始めた人", value=member.display_name, inline=True)
-        embed.add_field(name="開始時間", value=now.strftime('%H:%M'), inline=False)
-        if member.display_avatar:
-            embed.set_thumbnail(url=member.display_avatar.url)
+        embed.add_field(name="始めた人", value=name, inline=True)
+        embed.add_field(name="開始時間", value=now.strftime('%Y/%m/%d %H:%M:%S'), inline=False)
+        if avatar_url:
+            embed.set_thumbnail(url=avatar_url)
         
         try:
             await alert_channel.send(content="@everyone", embed=embed)
-            print(f"通知送信: {member.display_name} -> {after.channel.name}", flush=True)
         except Exception as e:
-            print(f"送信エラー: {e}", flush=True)
+            print(f"送信エラー: {e}")
 
-    # 通話終了（チャンネルから出た、かつ、誰もいなくなった）
+    # 通話終了（チャンネルから誰もいなくなった）
     elif before.channel is not None and len(before.channel.members) == 0:
         start_time = call_start_times.pop(before.channel.id, None)
-        embed = discord.Embed(title="🔚 通話終了", color=0x4d4dff)
+        embed = discord.Embed(title="通話終了", color=0x4d4dff)
         embed.add_field(name="チャンネル", value=before.channel.name, inline=False)
         
         if start_time:
             duration = now - start_time
-            # 秒数を計算して整形
+            # 秒以下の処理
             total_seconds = int(duration.total_seconds())
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
-            if hours > 0:
-                duration_str = f"{hours}時間{minutes}分{seconds}秒"
-            else:
-                duration_str = f"{minutes}分{seconds}秒"
+            duration_str = f"{hours}時間{minutes}分{seconds}秒" if hours > 0 else f"{minutes}分{seconds}秒"
+            
             embed.add_field(name="通話時間", value=duration_str, inline=False)
         else:
             embed.add_field(name="通話時間", value="不明", inline=False)
             
-        await alert_channel.send(embed=embed)
+        try:
+            await alert_channel.send(embed=embed)
+        except Exception as e:
+            print(f"送信エラー: {e}")
 
-# ▼▼▼ ポイント機能コマンド（変更なし） ▼▼▼
+# --- 以下、ポイント機能コマンド（変更なし） ---
 @tree.command(name="money", description="所持ポイントを確認")
 @app_commands.describe(user="確認したい相手（指定しない場合は自分）")
 async def money(interaction: discord.Interaction, user: discord.User = None):
@@ -146,7 +151,7 @@ async def transfer(interaction: discord.Interaction, source: discord.User, desti
     src_id = source.id
     dst_id = destination.id
     src_pt = user_points.get(src_id, 1000)
-    user_points[src_id] = src_pt
+    user_points[src_id] = src_pt 
 
     if amount <= 0:
         await interaction.response.send_message("❌ 1以上の数値を指定してください。", ephemeral=True)
@@ -171,17 +176,5 @@ async def remove(interaction: discord.Interaction, user: discord.User, amount: i
     user_points[uid] = user_points.get(uid, 1000) - amount
     await interaction.response.send_message(f"🔻 {user.mention} から {amount} pt 没収しました。")
 
-if __name__ == "__main__":
-    keep_alive()
-    if not TOKEN:
-        print("❌ エラー: TOKENが設定されていません。", flush=True)
-    else:
-        try:
-            client.run(TOKEN)
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                print("⛔ Cloudflare/Discordにより一時的にブロックされています。1時間ほどBotを停止してください。", flush=True)
-            else:
-                print(f"❌ HTTPエラー: {e}", flush=True)
-        except Exception as e:
-            print(f"❌ 実行エラー: {e}", flush=True)
+keep_alive()
+client.run(TOKEN)
