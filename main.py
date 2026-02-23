@@ -61,16 +61,33 @@ async def on_message(message):
 # ▼▼▼ 通話お知らせ機能 ▼▼▼
 @client.event
 async def on_voice_state_update(member, before, after):
-    if member.bot: return
+    # Bot自身の移動は無視
+    if member.bot:
+        return
 
     alert_channel = client.get_channel(ALERT_CHANNEL_ID)
-    if not alert_channel: return
+    if alert_channel is None:
+        print("❌ エラー: 通知チャンネルが見つかりません。IDを確認してください。", flush=True)
+        return
+
+    # ★修正点1: ミュートON/OFFなどの「チャンネル移動を伴わない変更」は無視する
+    if before.channel == after.channel:
+        return
 
     jst = datetime.timezone(datetime.timedelta(hours=9))
     now = datetime.datetime.now(jst)
 
-    # 通話開始
-    if after.channel is not None and len(after.channel.members) == 1:
+    # ★修正点2: チャンネル内の「Botではない人間」の数だけを数える関数
+    def get_human_count(channel):
+        if channel is None:
+            return 0
+        return sum(1 for m in channel.members if not m.bot)
+
+    humans_after = get_human_count(after.channel)
+    humans_before = get_human_count(before.channel)
+
+    # 通話開始（誰もいないチャンネルに最初の"人間"が入った）
+    if after.channel is not None and humans_after == 1:
         call_start_times[after.channel.id] = now
         
         embed = discord.Embed(title="通話開始", color=0xff4d4d)
@@ -82,11 +99,13 @@ async def on_voice_state_update(member, before, after):
         
         try:
             await alert_channel.send(content="@everyone", embed=embed)
-        except:
-            pass
+            print(f"✅ 通話開始通知を送信しました: {after.channel.name}", flush=True)
+        except Exception as e:
+            # ★修正点3: エラーを無視せずRenderのログに出力する
+            print(f"❌ 送信エラー(開始): {e}", flush=True)
 
-    # 通話終了
-    elif before.channel is not None and len(before.channel.members) == 0:
+    # 通話終了（チャンネルから"人間"が誰もいなくなった）
+    elif before.channel is not None and humans_before == 0:
         start_time = call_start_times.pop(before.channel.id, None)
         embed = discord.Embed(title="通話終了", color=0x4d4dff)
         embed.add_field(name="チャンネル", value=before.channel.name, inline=False)
@@ -103,9 +122,10 @@ async def on_voice_state_update(member, before, after):
             
         try:
             await alert_channel.send(embed=embed)
-        except:
-            pass
-
+            print(f"✅ 通話終了通知を送信しました: {before.channel.name}", flush=True)
+        except Exception as e:
+            print(f"❌ 送信エラー(終了): {e}", flush=True)
+            
 # --- ポイント機能（省略せずそのまま使えます） ---
 @tree.command(name="money", description="所持ポイントを確認")
 async def money(interaction: discord.Interaction, user: discord.User = None):
